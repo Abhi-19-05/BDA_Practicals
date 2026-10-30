@@ -1,0 +1,42 @@
+from pyspark.sql import SparkSession
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+spark = SparkSession.builder.appName(&quot;FlightDelayPrediction&quot;).getOrCreate()
+data = spark.read.csv(&quot;flights.csv&quot;, header=True, inferSchema=True)
+
+required = [&quot;Airline&quot;, &quot;Origin&quot;, &quot;Dest&quot;, &quot;Distance&quot;, &quot;DepTime&quot;, &quot;Delay&quot;]
+data = data.select(*required).dropna()
+
+train, test = data.randomSplit([0.8, 0.2], seed=42)
+
+indexers = [
+StringIndexer(inputCol=col, outputCol=col + &quot;_idx&quot;, handleInvalid=&quot;keep&quot;)
+for col in [&quot;Airline&quot;, &quot;Origin&quot;, &quot;Dest&quot;]
+]
+
+Practical 7 | Apache Spark
+
+encoder = OneHotEncoder(
+inputCols=[&quot;Airline_idx&quot;, &quot;Origin_idx&quot;, &quot;Dest_idx&quot;],
+outputCols=[&quot;AirlineVec&quot;, &quot;OriginVec&quot;, &quot;DestVec&quot;]
+)
+assembler = VectorAssembler(
+inputCols=[&quot;AirlineVec&quot;, &quot;OriginVec&quot;, &quot;DestVec&quot;, &quot;Distance&quot;, &quot;DepTime&quot;],
+outputCol=&quot;features&quot;,
+handleInvalid=&quot;keep&quot;
+)
+lr = LogisticRegression(labelCol=&quot;Delay&quot;, featuresCol=&quot;features&quot;)
+pipeline = Pipeline(stages=indexers + [encoder, assembler, lr])
+
+model = pipeline.fit(train)
+predictions = model.transform(test)
+predictions.select(&quot;Airline&quot;, &quot;Delay&quot;, &quot;prediction&quot;, &quot;probability&quot;).show(10, truncate=False)
+
+evaluator = MulticlassClassificationEvaluator(
+labelCol=&quot;Delay&quot;, predictionCol=&quot;prediction&quot;, metricName=&quot;accuracy&quot;
+)
+accuracy = evaluator.evaluate(predictions)
+print(&quot;Test Accuracy:&quot;, round(accuracy, 4))
