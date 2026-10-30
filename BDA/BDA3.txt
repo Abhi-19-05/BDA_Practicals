@@ -1,0 +1,117 @@
+
+create c.txt 
+
+MapReduce splits a massive text document into smaller data chunks.
+Mappers process individual chunks to extract every single word found.
+Each word generates a structured key-value output formatted as (word, 1).
+The framework automatically shuffles and groups identical words together network-wide.
+Reducers aggregate these grouped pairs by summing up their total values.
+The system delivers a single, consolidated list of final word frequencies.
+
+
+nano topWordMapper.py
+
+#!/usr/bin/env python
+
+import sys
+import re
+
+STOP_WORDS = "the is and a an of to in on for with at by from it this that as are was".split()
+
+for line in sys.stdin:
+    words = re.findall(r'[a-zA-Z]+', line.lower())
+
+    for w in words:
+        if w not in STOP_WORDS:
+            print("%s\t%d" % (w, 1))
+
+cat topWordMapper.py
+
+cat c.txt | python topWordMapper.py
+
+nano topWordReducer.py
+
+#!/usr/bin/env python
+
+import sys
+
+current_word = None
+current_count = 0
+
+for line in sys.stdin:
+    word, count = line.strip().split('\t')
+    count = int(count)
+
+    if current_word == word:
+        current_count += count
+    else:
+        if current_word:
+            print("%s\t%d" % (current_word, current_count))
+
+        current_word = word
+        current_count = count
+
+if current_word:
+    print("%s\t%d" % (current_word, current_count))
+
+cat topWordReducer.py
+chmod +x topWordReducer.py
+cat c.txt | python topWordMapper.py | sort | python topWordReducer.py
+
+hadoop fs -mkdir -p /user/cloudera/topWordInput
+hadoop fs -put c.txt /user/cloudera/topWordInput/
+hadoop fs -ls /user/cloudera/topWordInput
+hadoop fs -cat /user/cloudera/topWordInput/c.txt
+
+hadoop jar /usr/lib/hadoop-mapreduce/hadoop-streaming.jar -input /user/cloudera/topWordInput -output /user/cloudera/wordCountOutput -mapper topWordMapper.py -reducer topWordReducer.py -file topWordMapper.py -file topWordReducer.py
+
+hadoop fs -cat /user/cloudera/wordCountOutput/part-00000
+
+nano rankMapper.py
+
+#!/usr/bin/env python
+
+import sys
+
+for line in sys.stdin:
+    line = line.strip()
+
+    if not line:
+        continue
+
+    word, count = line.split('\t')
+
+    print("%s\t%s" % (count, word))
+
+
+chmod +x rankMapper.py
+cat c.txt | python topWordMapper.py | sort | python topWordReducer.py | python rankMapper.py
+
+
+nano rankReducer.py
+
+#!/usr/bin/env python
+
+import sys
+
+MAX_RESULTS = 10
+count_emitted = 0
+
+for line in sys.stdin:
+
+    if count_emitted >= MAX_RESULTS:
+        break
+
+    count, word = line.strip().split('\t')
+
+    print("%s\t%s" % (word, count))
+
+    count_emitted += 1
+
+
+chmod +x rankReducer.py
+echo -e "6\tdata\n4\thadoop\n3\tbig\n2\tcluster" | python rankReducer.py
+
+hadoop fs -rm -r /user/cloudera/topWordOutput
+hadoop fs -cat /user/cloudera/topWordOutput/part-00000
+

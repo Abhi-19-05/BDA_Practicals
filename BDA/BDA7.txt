@@ -1,0 +1,19 @@
+jps
+hbase shell
+status
+version
+create_namespace 'shop'
+create 'shop:customers', {NAME => 'info', VERSION => 2} ,{NAME => 'addr'}
+create 'shop:orders', {NAME => 'order', VERSION =>3} , {NAME => 'pay'}
+list_namespace_tables 'shop'
+describe 'shop:orders'
+put 'shop:orders', 'C103_05004', 'pay:mode', 'COD'
+put 'shop:orders', 'C103_05005', 'order:item', 'Monitor'
+put 'shop:orders', 'C103_05005', 'order:amount', '012000'
+put 'shop:orders', 'C103_05005', 'pay:mode', 'UPI'
+put 'shop:orders', 'C103_05005', 'order:status', 'PLACED'
+count 'shop:customers'
+count 'shop:orders'
+scan 'shop:orders', {ROWPREFIXFILTER => 'C101_'}
+scan 'shop:orders', {COLUMNS => ['order:item', 'order:status'], FILTER => "PrefixFilter('C103_')"}
+describe 'shop:orders'

@@ -1,0 +1,36 @@
+hdfs dfs -mkdir -p /examcell/2026/results/raw
+hdfs dfs -mkdir -p /examcell/2026/results/processed
+hdfs dfs -ls -R /examcell
+gedit raw_marks.csv &
+
+
+
+roll_no,name,subject,marks
+101,Amit,Math,85
+102,Priya,Science,90
+103,Rahul,English,76
+104,Sneha,Math,88
+105,Karan,Science
+106,Neha,English,92
+107,Arjun,Math,81
+108,Meera,Science,95
+109,Rohit,English,73
+110,Pooja,Math,89
+
+hdfs dfs -put raw_marks.csv /examcell/2026/results/raw/
+hdfs dfs -ls /examcell/2026/results/raw
+echo "Raw exam data uploaded on 13-July-2026, contains malformed record for testing." > readme.txt
+hdfs dfs -put readme.txt /examcell/2026/results/raw/
+hdfs dfs -ls /examcell/2026/results/raw
+
+hdfs dfs -touchz /examcell/2026/results/processed/processed_marks.csv
+hdfs dfs -ls /examcell/2026/results/processed
+hdfs dfs cat /examcell/2026/results/raw/raw_marks.csv
+hdfs dfs -cat /examcell/2026/results/raw/raw_marks.csv
+
+gedit readme.txt &
+hdfs dfs -rm /examcell/2026/results/raw/readme.txt
+hdfs dfs -put -readme.txt /examcell/2026/results/raw/
+hdfs dfs -put readme.txt /examcell/2026/results/raw/
+hdfs dfs -rm /examcell/2026/results/raw/readme.txt
+hdfs dfs -ls -R /examcell

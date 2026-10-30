@@ -1,0 +1,241 @@
+
+-- 1. Hive Configuration
+hive
+SET hive.support.concurrency = true;
+SET hive.enforce.bucketing = true;
+SET hive.exec.dynamic.partition.mode = nonstrict;
+SET hive.txn.manager = org.apache.hadoop.hive.ql.lockmgr.DbTxnManager;
+SET hive.compactor.initiator.on = true;
+
+
+-- 2. Create Transactions Table
+
+CREATE TABLE transactions (
+    txn_id INT,
+    account_id INT,
+    txn_type STRING,
+    amount FLOAT,
+    branch STRING,
+    txn_date STRING
+)
+PARTITIONED BY (txn_year INT)
+CLUSTERED BY (account_id) INTO 4 BUCKETS
+STORED AS ORC
+TBLPROPERTIES ("transactional"="true");
+
+
+-- 3. Create Accounts Table
+
+CREATE TABLE accounts (
+    account_id INT,
+    customer_name STRING,
+    account_type STRING,
+    branch STRING,
+    opening_date STRING
+)
+CLUSTERED BY (account_id) INTO 4 BUCKETS
+STORED AS ORC
+TBLPROPERTIES ("transactional"="true");
+
+
+-- 4. Insert Accounts Data
+
+INSERT INTO TABLE accounts VALUES
+(1001, 'Rahul Sharma', 'Savings', 'Mumbai', '2022-01-15'),
+(1002, 'Priya Patel', 'Savings', 'Pune', '2021-06-20'),
+(1003, 'Amit Kumar', 'Current', 'Delhi', '2020-03-10'),
+(1004, 'Sneha Joshi', 'Savings', 'Mumbai', '2023-02-18'),
+(1005, 'Rohan Mehta', 'Current', 'Ahmedabad', '2021-11-05'),
+(1006, 'Neha Singh', 'Savings', 'Delhi', '2022-08-12'),
+(1007, 'Vikas Shah', 'Savings', 'Pune', '2020-09-25'),
+(1008, 'Anjali Desai', 'Current', 'Ahmedabad', '2023-04-11');
+
+
+-- 5. Insert Transactions for 2024
+
+INSERT INTO TABLE transactions PARTITION (txn_year=2024) VALUES
+(1, 1001, 'Deposit', 50000, 'Mumbai', '2024-01-10'),
+(2, 1001, 'Withdrawal', 10000, 'Mumbai', '2024-01-15'),
+(3, 1002, 'Deposit', 75000, 'Pune', '2024-02-05'),
+(4, 1002, 'Withdrawal', 15000, 'Pune', '2024-02-12'),
+(5, 1003, 'Deposit', 100000, 'Delhi', '2024-03-08'),
+(6, 1003, 'Withdrawal', 20000, 'Delhi', '2024-03-15'),
+(7, 1004, 'Deposit', 60000, 'Mumbai', '2024-04-10'),
+(8, 1004, 'Withdrawal', 5000, 'Mumbai', '2024-04-18'),
+(9, 1005, 'Deposit', 80000, 'Ahmedabad', '2024-05-07'),
+(10, 1005, 'Withdrawal', 12000, 'Ahmedabad', '2024-05-20'),
+(11, 1006, 'Deposit', 90000, 'Delhi', '2024-06-11'),
+(12, 1006, 'Withdrawal', 25000, 'Delhi', '2024-06-25'),
+(13, 1007, 'Deposit', 45000, 'Pune', '2024-07-05'),
+(14, 1007, 'Withdrawal', 8000, 'Pune', '2024-07-16'),
+(15, 1008, 'Deposit', 70000, 'Ahmedabad', '2024-08-09'),
+(16, 1008, 'Withdrawal', 10000, 'Ahmedabad', '2024-08-22');
+
+
+-- 6. Insert Transactions for 2025
+
+INSERT INTO TABLE transactions PARTITION (txn_year=2025) VALUES
+(17, 1001, 'Deposit', 65000, 'Mumbai', '2025-01-10'),
+(18, 1001, 'Withdrawal', 12000, 'Mumbai', '2025-01-18'),
+(19, 1002, 'Deposit', 85000, 'Pune', '2025-02-06'),
+(20, 1002, 'Withdrawal', 18000, 'Pune', '2025-02-15'),
+(21, 1003, 'Deposit', 120000, 'Delhi', '2025-03-09'),
+(22, 1003, 'Withdrawal', 30000, 'Delhi', '2025-03-20'),
+(23, 1004, 'Deposit', 70000, 'Mumbai', '2025-04-12'),
+(24, 1005, 'Deposit', 95000, 'Ahmedabad', '2025-05-10'),
+(25, 1006, 'Withdrawal', 20000, 'Delhi', '2025-06-14'),
+(26, 1007, 'Deposit', 55000, 'Pune', '2025-07-08'),
+(27, 1008, 'Deposit', 90000, 'Ahmedabad', '2025-08-11');
+
+
+-- 7. Display Tables
+
+SELECT * FROM accounts;
+SELECT * FROM transactions;
+
+DESCRIBE accounts;
+DESCRIBE transactions;
+
+
+-- 8. Show Partitions
+
+SHOW PARTITIONS transactions;
+
+
+-- 9. Bucketing Using TABLESAMPLE
+
+SELECT *
+FROM transactions
+TABLESAMPLE(BUCKET 1 OUT OF 4 ON account_id)
+WHERE txn_year = 2024;
+
+
+-- 10. Create Index
+
+CREATE INDEX transactions_branch_index
+ON TABLE transactions (branch)
+AS 'COMPACT'
+WITH DEFERRED REBUILD;
+
+SHOW INDEX ON transactions;
+
+ALTER INDEX transactions_branch_index
+ON transactions
+REBUILD;
+
+
+-- 11. Update Account Type
+
+UPDATE accounts
+SET account_type = 'Premium'
+WHERE account_id = 1003;
+
+SELECT account_id, customer_name, account_type
+FROM accounts
+WHERE account_id = 1003;
+
+
+-- 12. Inner Join
+
+SELECT
+    t.txn_id,
+    t.account_id,
+    a.customer_name,
+    a.account_type,
+    t.txn_type,
+    t.amount,
+    t.branch,
+    t.txn_date,
+    t.txn_year
+FROM transactions t
+JOIN accounts a
+ON t.account_id = a.account_id;
+
+
+-- 13. Left Join: Accounts Without 2025 Transactions
+
+SELECT
+    a.account_id,
+    a.customer_name,
+    a.account_type,
+    a.branch
+FROM accounts a
+LEFT JOIN transactions t
+ON a.account_id = t.account_id
+AND t.txn_year = 2025
+WHERE t.account_id IS NULL;
+
+
+-- 14. Total Amount by Branch, Year and Transaction Type
+
+SELECT
+    branch,
+    txn_year,
+    txn_type,
+    SUM(amount) AS total_amount
+FROM transactions
+GROUP BY branch, txn_year, txn_type
+ORDER BY txn_year, branch, txn_type;
+
+
+-- 15. Top 5 Accounts by Total Transaction Amount
+
+SELECT
+    a.account_id,
+    a.customer_name,
+    SUM(t.amount) AS total_transaction_amount
+FROM transactions t
+JOIN accounts a
+ON t.account_id = a.account_id
+GROUP BY a.account_id, a.customer_name
+ORDER BY total_transaction_amount DESC
+LIMIT 5;
+
+
+-- 16. Suspicious Withdrawal Activity
+
+SELECT
+    account_id,
+    txn_date,
+    COUNT(*) AS withdrawal_count
+FROM transactions
+WHERE txn_type = 'Withdrawal'
+GROUP BY account_id, txn_date
+HAVING COUNT(*) > 10
+ORDER BY withdrawal_count DESC;
+
+
+-- 17. Year-over-Year Transaction Growth Using LAG
+
+SELECT
+    branch,
+    txn_year,
+    total_amount,
+    LAG(total_amount, 1) OVER (
+        PARTITION BY branch
+        ORDER BY txn_year
+    ) AS previous_year_amount,
+    total_amount - LAG(total_amount, 1) OVER (
+        PARTITION BY branch
+        ORDER BY txn_year
+    ) AS yoy_growth
+FROM (
+    SELECT
+        branch,
+        txn_year,
+        SUM(amount) AS total_amount
+    FROM transactions
+    GROUP BY branch, txn_year
+) yearly_data
+ORDER BY branch, txn_year;
+
+
+-- 18. Branch with Highest Average Transaction Amount
+
+SELECT
+    branch,
+    AVG(amount) AS average_transaction_amount
+FROM transactions
+GROUP BY branch
+ORDER BY average_transaction_amount DESC
+LIMIT 1;

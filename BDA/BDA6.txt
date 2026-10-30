@@ -1,0 +1,106 @@
+
+# Generate CSV files
+python - <<'PY'
+import csv
+import random
+
+random.seed(42)
+
+names = ["Aarav", "Diya", "Kabir", "Meera", "Rohan", "Sneha", "Tanvi", "Yash", "Isha", "Neel", "Aditya", "Ananya", "Arjun", "Aditi", "Rahul", "Priya", "Karan", "Pooja", "Vikram", "Riya", "Dev", "Nisha", "Sahil", "Kavya", "Varun", "Anika", "Om", "Sanya", "Aryan", "Ira"]
+
+cities = ["Nagpur", "Pune", "Mumbai", "Nashik"]
+departments = ["CSE", "DS", "IT"]
+
+original = [
+    [1, "Aarav", 85, 78, 92],
+    [2, "Diya", 72, 66, 81],
+    [3, "Kabir", 90, 88, 95],
+    [4, "Meera", 55, 60, 47],
+    [5, "Rohan", 68, 74, 71],
+    [6, "Sneha", 82, 91, 88],
+    [7, "Tanvi", 45, 52, 59],
+    [8, "Yash", 77, 69, 82],
+    [9, "Isha", 93, 89, 97],
+    [10, "Neel", 60, 58, 65]
+]
+
+with open("students.csv", "w") as f:
+    writer = csv.writer(f)
+    for row in original:
+        writer.writerow(row)
+    for rollno in range(11, 101):
+        name = names[(rollno - 1) % len(names)]
+        m1 = random.randint(35, 100)
+        m2 = random.randint(35, 100)
+        m3 = random.randint(35, 100)
+        writer.writerow([rollno, name, m1, m2, m3])
+
+with open("student_info.csv", "w") as f:
+    writer = csv.writer(f)
+    for rollno in range(1, 101):
+        dept = departments[(rollno - 1) % len(departments)]
+        city = cities[(rollno - 1) % len(cities)]
+        writer.writerow([rollno, dept, city])
+    writer.writerow([101, "CSE", "Nagpur"])
+
+print("CSV files created successfully")
+PY
+
+# Check CSV files
+wc -l students.csv student_info.csv
+head -10 students.csv
+
+# Create HDFS directory and upload data
+hdfs dfs -mkdir -p /user/cloudera/input
+hdfs dfs -put students.csv /user/cloudera/input/
+hdfs dfs -ls /user/cloudera/input
+hdfs dfs -cat /user/cloudera/input/students.csv 
+
+# Start Apache Pig
+pig
+
+# Execute below commands inside Pig (grunt>)
+
+students = LOAD '/user/cloudera/input/students.csv'
+USING PigStorage(',')
+AS (rollno:int, name:chararray, m1:int, m2:int, m3:int);
+
+DESCRIBE students;
+
+preview = LIMIT students 10;
+DUMP preview;
+
+result = FOREACH students GENERATE
+rollno,
+name,
+(m1 + m2 + m3) AS total,
+((m1 + m2 + m3) / 3.0) AS average;
+
+status = FOREACH result GENERATE
+rollno,
+name,
+total,
+average,
+(average >= 60.0 ? 'PASS' : 'FAIL') AS remark;
+
+DESCRIBE status;
+DUMP status;
+
+ordered = ORDER status BY average DESC;
+DUMP ordered;
+
+top3 = LIMIT ordered 3;
+DUMP top3;
+
+STORE ordered INTO '/user/cloudera/output/merit_list'
+USING PigStorage(',');
+
+STORE top3 INTO '/user/cloudera/output/top3_students'
+USING PigStorage(',');
+
+quit;
+
+# Verify output in terminal
+hdfs dfs -ls /user/cloudera/output/merit_list
+hdfs dfs -ls /user/cloudera/output/top3_students
+hdfs dfs -cat /user/cloudera/output/top3_students/part-r-00000
